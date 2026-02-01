@@ -34,3 +34,5 @@ tqdm==4.67.1
 typing_extensions==4.13.2
 uvicorn==0.33.0
 python-dotenv==1.0.1
+setuptools
+wheel
