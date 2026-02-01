@@ -4,7 +4,7 @@ load_dotenv()
 from fastapi import FastAPI, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 import shutil
-from .main import run_pipeline
+from .pipeline import run_pipeline
 
 app = FastAPI()
 
