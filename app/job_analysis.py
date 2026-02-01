@@ -1,43 +1,32 @@
-import json
-import re
-import os
-from dotenv import load_dotenv
-from openai import OpenAI
-
-load_dotenv()
-
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-
-
 def extract_job_skills_from_text(job_description: str) -> dict:
-    prompt = f"""
-You are an expert technical recruiter.
+    """
+    Dummy safe extractor to unblock pipeline.
+    (سنرجع نذكّيه بعد ما يشتغل السيرفر)
+    """
+    if not job_description:
+        return {"skills": []}
 
-Extract skills from the job description.
+    text = job_description.lower()
 
-Return ONLY valid JSON.
+    skills = []
 
-JSON format:
-{{
-  "skills": []
-}}
+    KEYWORDS = [
+        "python",
+        "sql",
+        "machine learning",
+        "data analysis",
+        "statistics",
+        "cybersecurity",
+        "linux",
+        "networking",
+        "cloud",
+        "aws",
+        "azure",
+        "docker"
+    ]
 
-Job Description:
-{job_description}
-"""
+    for k in KEYWORDS:
+        if k in text:
+            skills.append(k)
 
-    response = client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=[{"role": "user", "content": prompt}],
-        temperature=0
-    )
-
-    content = response.choices[0].message.content.strip()
-    content = re.sub(r"^```json|```$", "", content).strip()
-
-    try:
-        return json.loads(content)
-    except Exception:
-        return {
-            "skills": []
-        }
+    return {"skills": skills}
