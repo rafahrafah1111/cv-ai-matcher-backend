@@ -4,12 +4,9 @@ import os
 from dotenv import load_dotenv
 from openai import OpenAI
 
-# ✅ حمّلي .env أول شيء
 load_dotenv()
 
 api_key = os.getenv("OPENAI_API_KEY")
-print("OPENAI_API_KEY loaded:", bool(api_key))
-
 if not api_key:
     raise RuntimeError("OPENAI_API_KEY is not set")
 
@@ -17,21 +14,54 @@ client = OpenAI(api_key=api_key)
 
 
 def analyze_cv_with_gpt4o(raw_cv_text: str):
-    prompt = f"""
-You are an AI that extracts structured data from a CV.
+    """
+    Uses GPT to deeply analyze a CV and extract high-quality structured data.
+    """
 
-Return ONLY valid JSON.
-Do not include explanations.
-Do not include markdown.
-Do not include code blocks.
+    system_prompt = """
+You are a senior technical recruiter and CV analyst.
 
-JSON format:
+Your job:
+- Read the CV carefully
+- Infer missing but obvious skills (do NOT hallucinate)
+- Normalize skills (e.g. "Python programming" → "Python")
+- Prefer HARD SKILLS over soft skills
+- Extract real experience, not fluff
+
+Rules:
+- Output ONLY valid JSON
+- No markdown
+- No explanations
+- No trailing commas
+"""
+
+    user_prompt = f"""
+Analyze the following CV text and return structured data.
+
+Required JSON schema:
 {{
-  "name": "",
-  "skills": [],
-  "experience": [],
-  "education": [],
-  "summary": ""
+  "name": "Full name if available, otherwise empty string",
+  "title": "Current or most recent professional title",
+  "skills": [
+    "List of technical skills only (languages, frameworks, tools, concepts)"
+  ],
+  "experience": [
+    {{
+      "role": "",
+      "company": "",
+      "years": "",
+      "highlights": ["short bullet achievements"]
+    }}
+  ],
+  "education": [
+    {{
+      "degree": "",
+      "field": "",
+      "institution": "",
+      "year": ""
+    }}
+  ],
+  "summary": "1–2 sentence professional summary inferred from CV"
 }}
 
 CV TEXT:
@@ -40,17 +70,28 @@ CV TEXT:
 
     response = client.chat.completions.create(
         model="gpt-4o-mini",
-        messages=[{"role": "user", "content": prompt}],
-        temperature=0
+        temperature=0.2,
+        messages=[
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt}
+        ]
     )
 
     content = response.choices[0].message.content.strip()
 
-    # تنظيف لو GPT لفّ JSON
+    # Clean accidental markdown
     content = re.sub(r"^```json|```$", "", content).strip()
 
     try:
-        return json.loads(content)
+        parsed = json.loads(content)
+
+        # 🧹 Safety normalization
+        parsed["skills"] = sorted(
+            list(set(skill.strip() for skill in parsed.get("skills", []) if skill))
+        )
+
+        return parsed
+
     except Exception:
         return {
             "error": "Invalid JSON from model",

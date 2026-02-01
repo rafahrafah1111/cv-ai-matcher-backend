@@ -1,65 +1,53 @@
-# app/career_roadmap.py
+import json
+import re
+import os
+from dotenv import load_dotenv
+from openai import OpenAI
 
-ROADMAP_LIBRARY = {
-    "sql": {
-        "30": [
-            "Learn SQL basics (SELECT, WHERE, ORDER BY)",
-            "Practice queries on sample datasets"
-        ],
-        "60": [
-            "Learn JOINs, GROUP BY, subqueries",
-            "Build a small SQL project"
-        ],
-        "90": [
-            "Use SQL with Python (pandas)",
-            "Prepare SQL interview questions"
-        ]
-    },
-    "statistics": {
-        "30": [
-            "Review mean, median, variance",
-            "Understand probability basics"
-        ],
-        "60": [
-            "Learn hypothesis testing",
-            "Apply statistics in data analysis"
-        ],
-        "90": [
-            "Use statistics in ML evaluation",
-            "Prepare statistics interview questions"
-        ]
-    },
-    "machine learning": {
-        "30": [
-            "Revise supervised vs unsupervised learning"
-        ],
-        "60": [
-            "Build ML project using scikit-learn"
-        ],
-        "90": [
-            "Optimize models and tune hyperparameters"
-        ]
-    }
-}
+load_dotenv()
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 
 def generate_career_roadmap(missing_skills: list) -> dict:
-    roadmap = {
-        "30_days": [],
-        "60_days": [],
-        "90_days": []
-    }
+    """
+    Generate a realistic 30/60/90 day career roadmap.
+    """
 
-    for skill in missing_skills:
-        key = skill.lower()
+    prompt = f"""
+You are an expert career coach.
 
-        if key in ROADMAP_LIBRARY:
-            roadmap["30_days"].extend(ROADMAP_LIBRARY[key]["30"])
-            roadmap["60_days"].extend(ROADMAP_LIBRARY[key]["60"])
-            roadmap["90_days"].extend(ROADMAP_LIBRARY[key]["90"])
-        else:
-            roadmap["30_days"].append(f"Learn fundamentals of {skill}")
-            roadmap["60_days"].append(f"Apply {skill} in a small project")
-            roadmap["90_days"].append(f"Use {skill} professionally and apply for jobs")
+Create a realistic 30/60/90 day roadmap to help a candidate close skill gaps.
 
-    return roadmap
+Rules:
+- Return ONLY valid JSON
+- No markdown
+- No generic advice
+- Focus on concrete actions
+
+JSON format:
+{{
+  "30_days": ["action1", "action2"],
+  "60_days": ["action1", "action2"],
+  "90_days": ["action1", "action2"]
+}}
+
+Missing skills:
+{missing_skills}
+"""
+
+    response = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[{"role": "user", "content": prompt}],
+        temperature=0.4
+    )
+
+    content = response.choices[0].message.content.strip()
+    content = re.sub(r"^```json|```$", "", content).strip()
+
+    try:
+        return json.loads(content)
+    except Exception:
+        return {
+            "error": "Invalid JSON from model",
+            "raw_response": content
+        }
