@@ -1,17 +1,43 @@
-def analyze_job_description(job_description: str) -> dict:
-    known_skills = [
-        "python", "sql", "excel", "data analysis", "machine learning",
-        "nlp", "flask", "api", "statistics", "power bi", "tableau",
-        "git", "cloud", "aws", "docker", "deep learning"
-    ]
+import json
+import re
+import os
+from dotenv import load_dotenv
+from openai import OpenAI
 
-    text_lower = job_description.lower()
+load_dotenv()
 
-    extracted_skills = [
-        skill for skill in known_skills if skill in text_lower
-    ]
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-    return {
-        "skills": extracted_skills,
-        "raw_text": job_description
-    }
+
+def extract_job_skills_from_text(job_description: str) -> dict:
+    prompt = f"""
+You are an expert technical recruiter.
+
+Extract skills from the job description.
+
+Return ONLY valid JSON.
+
+JSON format:
+{{
+  "skills": []
+}}
+
+Job Description:
+{job_description}
+"""
+
+    response = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[{"role": "user", "content": prompt}],
+        temperature=0
+    )
+
+    content = response.choices[0].message.content.strip()
+    content = re.sub(r"^```json|```$", "", content).strip()
+
+    try:
+        return json.loads(content)
+    except Exception:
+        return {
+            "skills": []
+        }
