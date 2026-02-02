@@ -1,32 +1,75 @@
-def extract_job_skills_from_text(job_description: str) -> dict:
+import json
+import re
+import os
+from dotenv import load_dotenv
+from openai import OpenAI
+
+load_dotenv()
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+
+
+def extract_job_skills_from_text(job_text: str) -> dict:
     """
-    Dummy safe extractor to unblock pipeline.
-    (سنرجع نذكّيه بعد ما يشتغل السيرفر)
+    Extracts normalized hard skills from a job description.
     """
-    if not job_description:
-        return {"skills": []}
 
-    text = job_description.lower()
+    system_prompt = """
+You are a senior technical recruiter.
 
-    skills = []
+Your task:
+- Extract ONLY hard/technical skills from the job description
+- Ignore soft skills, buzzwords, and generic phrases
+- Normalize skills (e.g. "Python programming" → "Python")
+- Do NOT hallucinate skills not mentioned or clearly implied
 
-    KEYWORDS = [
-        "python",
-        "sql",
-        "machine learning",
-        "data analysis",
-        "statistics",
-        "cybersecurity",
-        "linux",
-        "networking",
-        "cloud",
-        "aws",
-        "azure",
-        "docker"
-    ]
+Rules:
+- Output ONLY valid JSON
+- No explanations
+- No markdown
+"""
 
-    for k in KEYWORDS:
-        if k in text:
-            skills.append(k)
+    user_prompt = f"""
+Analyze the following job description.
 
-    return {"skills": skills}
+Return JSON in this exact format:
+{{
+  "title": "",
+  "skills": [
+    "python",
+    "sql",
+    "machine learning"
+  ]
+}}
+
+Job Description:
+{job_text}
+"""
+
+    response = client.chat.completions.create(
+        model="gpt-4o-mini",
+        temperature=0.2,
+        messages=[
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt}
+        ]
+    )
+
+    content = response.choices[0].message.content.strip()
+    content = re.sub(r"^```json|```$", "", content).strip()
+
+    try:
+        parsed = json.loads(content)
+
+        parsed["skills"] = sorted(
+            list(set(skill.strip().lower() for skill in parsed.get("skills", []) if skill))
+        )
+
+        return parsed
+
+    except Exception:
+        return {
+            "title": "",
+            "skills": [],
+            "error": "Failed to parse job description",
+            "raw_response": content
+        }

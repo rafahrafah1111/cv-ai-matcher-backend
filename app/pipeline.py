@@ -1,41 +1,116 @@
+from .cv_ingestion import load_cv
+from .cv_understanding import analyze_cv_with_gpt4o
+from .job_analysis import extract_job_skills_from_text
+from .matching import match_cv_to_job
+from .upskilling import generate_upskilling_recommendations
+from .career_roadmap import generate_career_roadmap
+
+
 def run_pipeline(cv_file_path: str, job_description: str):
-    # 1️⃣ Load CV text
-    raw_cv_text = load_cv(cv_file_path)
+    """
+    Full CV → Job matching pipeline.
+    Returns stable, explainable, student-aware results.
+    """
 
-    if not raw_cv_text:
-        raise ValueError("Failed to extract text from CV")
+    try:
+        # 1️⃣ Load CV text
+        raw_cv_text = load_cv(cv_file_path)
+        if not raw_cv_text:
+            raise ValueError("Failed to extract text from CV")
 
-    # 2️⃣ Analyze CV with GPT
-    cv_structured = analyze_cv_with_gpt4o(raw_cv_text)
+        # 2️⃣ Analyze CV with GPT
+        cv_structured = analyze_cv_with_gpt4o(raw_cv_text)
+        if not isinstance(cv_structured, dict):
+            raise ValueError("CV analysis failed")
 
-    if not isinstance(cv_structured, dict):
-        raise ValueError("CV analysis failed")
+        # 3️⃣ Analyze job description
+        job_structured = extract_job_skills_from_text(job_description)
+        if not isinstance(job_structured, dict):
+            raise ValueError("Job analysis failed")
 
-    # 3️⃣ Extract job skills
-    job_structured = extract_job_skills_from_text(job_description)
+        # 4️⃣ Match CV to Job
+        match_result = match_cv_to_job(cv_structured, job_structured)
+        if not isinstance(match_result, dict):
+            raise ValueError("Matching failed")
 
-    if not isinstance(job_structured, dict):
-        raise ValueError("Job analysis failed")
+        missing_skills = match_result.get("missing_skills", [])
+        matched_skills = match_result.get("matched_skills", [])
 
-    # 4️⃣ Match CV to Job
-    match_result = match_cv_to_job(cv_structured, job_structured)
+        # 🧠 5️⃣ SMART UPSKILLING SELECTION (core-first, student-friendly)
+        CORE_UPSKILL = {
+            "deep learning",
+            "machine learning",
+            "data preprocessing",
+            "feature engineering",
+            "computer vision",
+            "nlp",
+            "statistics",
+        }
 
-    # 5️⃣ Upskilling recommendations (RETURNS LIST ✅)
-    upskilling = generate_upskilling_recommendations(
-        match_result.get("missing_skills", [])
-    )
+        OPTIONAL_UPSKILL = {
+            "cloud",
+            "cloud platforms",
+            "mlops",
+            "ci/cd",
+            "model deployment",
+            "docker",
+            "kubernetes",
+        }
 
-    # 6️⃣ Career roadmap
-    career_roadmap = generate_career_roadmap(
-        match_result.get("missing_skills", [])
-    )
+        # Pick core gaps first
+        upskill_targets = [s for s in missing_skills if s in CORE_UPSKILL]
 
-    # 7️⃣ Final clean response for frontend
-    return {
-        "match_score": match_result.get("match_percentage", 0),
-        "decision": match_result.get("decision", "Unknown"),
-        "matched_skills": match_result.get("matched_skills", []),
-        "missing_skills": match_result.get("missing_skills", [])[:5],
-        "upskilling": upskilling if isinstance(upskilling, list) else [],
-        "career_roadmap": career_roadmap if career_roadmap else []
-    }
+        # Limit to max 3 core skills
+        upskill_targets = upskill_targets[:3]
+
+        # If still less than 3, add ONE optional skill only
+        if len(upskill_targets) < 3:
+            optional = [s for s in missing_skills if s in OPTIONAL_UPSKILL]
+            if optional:
+                upskill_targets.append(optional[0])
+
+        # 6️⃣ Generate upskilling recommendations
+        upskilling = generate_upskilling_recommendations(upskill_targets)
+        upskilling_courses = (
+            upskilling.get("courses", []) if isinstance(upskilling, dict) else []
+        )
+
+        # 7️⃣ Career roadmap (optional / future use)
+        career_roadmap = generate_career_roadmap(upskill_targets)
+        if not isinstance(career_roadmap, list):
+            career_roadmap = []
+
+        # 🧠 8️⃣ Explainability (for academic clarity)
+        explanation = {
+            "strengths": matched_skills[:5],
+            "main_gaps": missing_skills[:3],
+            "summary": (
+                "Candidate demonstrates strong core AI foundations suitable for a junior role."
+                if "Junior" in match_result.get("decision", "")
+                else "Candidate partially meets the role requirements and would benefit from targeted upskilling."
+            ),
+        }
+
+        # 9️⃣ Final response
+        return {
+            "match_score": match_result.get("match_percentage", 0),
+            "decision": match_result.get("decision", "Unknown"),
+            "matched_skills": matched_skills,
+            "missing_skills": missing_skills,
+            "upskilling": upskilling_courses,
+            "career_roadmap": career_roadmap,
+            "explanation": explanation,
+        }
+
+    except Exception as e:
+        # 🛑 FAIL-SAFE: never crash the API
+        return {
+            "match_score": 0,
+            "decision": "Error",
+            "matched_skills": [],
+            "missing_skills": [],
+            "upskilling": [],
+            "career_roadmap": [],
+            "explanation": {},
+            "error": str(e),
+        }

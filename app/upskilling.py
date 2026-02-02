@@ -8,34 +8,41 @@ load_dotenv()
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 
-def generate_upskilling_recommendations(missing_skills: list) -> list:
+def generate_upskilling_recommendations(missing_skills: list) -> dict:
     """
-    Generate concrete upskilling recommendations for missing skills.
+    Always returns:
+    {
+      "courses": [ ... ]
+    }
+    Never returns empty if missing_skills exist.
     """
 
     if not missing_skills:
-        return []
+        return {"courses": []}
 
     prompt = f"""
-You are a senior career mentor.
+You are a senior AI career mentor.
 
-Based on the missing skills below, recommend practical learning resources.
+For EACH missing skill, recommend ONE concrete learning resource.
 
 Rules:
 - Return ONLY valid JSON
-- No explanations
 - No markdown
-- Be concise and practical
+- No explanations
+- Be realistic for STUDENTS / JUNIORS
+- Prefer free or beginner-friendly resources
 
-JSON format:
-[
-  {{
-    "skill": "",
-    "recommended_course": "",
-    "platform": "",
-    "reason": ""
-  }}
-]
+JSON schema (STRICT):
+{{
+  "courses": [
+    {{
+      "skill": "string",
+      "recommended_course": "string",
+      "platform": "Coursera | Udemy | YouTube | edX | Free",
+      "reason": "short practical reason"
+    }}
+  ]
+}}
 
 Missing skills:
 {missing_skills}
@@ -43,14 +50,33 @@ Missing skills:
 
     response = client.chat.completions.create(
         model="gpt-4o-mini",
-        messages=[{"role": "user", "content": prompt}],
-        temperature=0.3
+        temperature=0.3,
+        messages=[{"role": "user", "content": prompt}]
     )
 
     content = response.choices[0].message.content.strip()
     content = re.sub(r"^```json|```$", "", content).strip()
 
     try:
-        return json.loads(content)
+        parsed = json.loads(content)
+
+        # 🛡️ HARD SAFETY: enforce structure
+        courses = parsed.get("courses", [])
+        if not isinstance(courses, list):
+            raise ValueError("Invalid courses format")
+
+        return {"courses": courses}
+
     except Exception:
-        return []
+        # 🚨 FALLBACK: generate simple manual recommendations
+        return {
+            "courses": [
+                {
+                    "skill": skill,
+                    "recommended_course": f"Introduction to {skill}",
+                    "platform": "YouTube",
+                    "reason": "Core foundational skill for the role"
+                }
+                for skill in missing_skills
+            ]
+        }

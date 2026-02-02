@@ -1,135 +1,207 @@
 from typing import List, Dict, Set
 
 
-# 🔹 Skill normalization map (implicit → explicit signals)
-IMPLICIT_SKILL_MAP = {
-    "sql": {
-        "pandas",
+# 🧠 General skill reasoning graph (domain-agnostic)
+SKILL_GRAPH = {
+    "python": {
+        "data preprocessing",
+        "feature engineering",
+        "algorithms",
+        "data structures",
         "numpy",
-        "data analysis",
-        "exploratory data analysis",
-        "eda",
-        "tableau",
-        "database",
-        "data visualization",
-    },
-    "statistics": {
-        "data science",
-        "machine learning",
-        "model evaluation",
-        "probability",
-        "analysis",
+        "pandas",
     },
     "machine learning": {
-        "scikit-learn",
-        "sklearn",
-        "model training",
-        "classification",
-        "regression",
-        "ml",
+        "statistics",
+        "model evaluation",
+        "feature engineering",
+        "data preprocessing",
+    },
+    "deep learning": {
+        "neural networks",
+        "tensorflow",
+        "pytorch",
+    },
+    "computer vision": {
+        "image processing",
+        "opencv",
+    },
+    "nlp": {
+        "text preprocessing",
+        "tokenization",
+        "language models",
     },
 }
 
+# 🎯 Core skills define suitability for the role
+CORE_SKILLS = {
+    "python",
+    "machine learning",
+    "deep learning",
+    "data science",
+    "artificial intelligence",
+}
 
-def normalize_skill(skill: str) -> str:
-    """Normalize skill text for matching"""
+# 🧩 Optional / advanced skills (should not penalize students harshly)
+OPTIONAL_SKILLS = {
+    "cloud",
+    "cloud platforms",
+    "aws",
+    "gcp",
+    "azure",
+    "mlops",
+    "ci/cd",
+    "docker",
+    "kubernetes",
+    "model deployment",
+}
+
+# ⚖️ Skill weights
+SKILL_WEIGHTS = {
+    "core": 3,
+    "supporting": 2,
+    "optional": 1,
+}
+
+
+def normalize(skill: str) -> str:
     return skill.strip().lower()
 
 
-def extract_explicit_skills(cv_skills: List[str]) -> Set[str]:
-    """Extract normalized explicit skills from CV"""
-    return {normalize_skill(skill) for skill in cv_skills if skill}
+def classify_skill(skill: str) -> str:
+    if skill in CORE_SKILLS:
+        return "core"
+    if skill in OPTIONAL_SKILLS:
+        return "optional"
+    return "supporting"
 
 
-def infer_skills(
-    explicit_skills: Set[str],
-    education: List[Dict]
-) -> Set[str]:
+def extract_explicit_skills(skills: List[str]) -> Set[str]:
+    return {normalize(s) for s in skills if s}
+
+
+def infer_skills(explicit: Set[str], education: List[Dict]) -> Set[str]:
     """
-    Infer implicit skills from explicit skills and education
+    Infer logically connected skills based on known skills and education.
     """
     inferred = set()
 
-    # 🔹 Infer from explicit skills
-    for target_skill, indicators in IMPLICIT_SKILL_MAP.items():
-        if explicit_skills.intersection(indicators):
-            inferred.add(target_skill)
+    # 🔹 Skill-based inference
+    for skill in explicit:
+        if skill in SKILL_GRAPH:
+            inferred.update(SKILL_GRAPH[skill])
 
-    # 🔹 Infer from education
+    # 🔹 Education-based inference (generic & scalable)
     for edu in education:
-        degree = normalize_skill(edu.get("degree", ""))
-        field = normalize_skill(edu.get("field", ""))
+        text = f"{edu.get('degree', '')} {edu.get('field', '')}".lower()
 
-        combined = degree + " " + field
+        if "computer science" in text:
+            inferred.update({"python", "algorithms", "data structures"})
+        if "data science" in text:
+            inferred.update({"machine learning", "statistics"})
+        if "artificial intelligence" in text:
+            inferred.update({"machine learning", "deep learning"})
 
-        if "data science" in combined:
-            inferred.update({"statistics", "sql"})
-        if "computer science" in combined:
-            inferred.update({"python", "algorithms"})
-        if "artificial intelligence" in combined:
-            inferred.add("machine learning")
+    return inferred - explicit
 
-    return inferred
+
+def is_student(cv: Dict) -> bool:
+    experience = cv.get("experience", [])
+    summary = cv.get("summary", "").lower()
+
+    if len(experience) <= 1:
+        return True
+
+    student_terms = ["student", "intern", "junior", "undergraduate"]
+    return any(term in summary for term in student_terms)
 
 
 def match_cv_to_job(cv: Dict, job: Dict) -> Dict:
-    """
-    Match CV against job description using weighted explicit + inferred skills
-    """
-    cv_skills = cv.get("skills", [])
-    education = cv.get("education", [])
-    job_skills = job.get("skills", [])
+    explicit = extract_explicit_skills(cv.get("skills", []))
+    inferred = infer_skills(explicit, cv.get("education", []))
+    job_skills = {normalize(s) for s in job.get("skills", [])}
 
     if not job_skills:
         return {
             "match_percentage": 0,
             "matched_skills": [],
             "missing_skills": [],
-            "decision": "No Job Skills Provided"
+            "decision": "No Job Skills Provided",
+            "confidence": 0.0,
         }
 
-    explicit_skills = extract_explicit_skills(cv_skills)
-    inferred_skills = infer_skills(explicit_skills, education)
-
-    normalized_job_skills = {normalize_skill(skill) for skill in job_skills}
+    student_mode = is_student(cv)
 
     matched = []
     missing = []
 
     score = 0
-    max_score = len(normalized_job_skills) * 2  # explicit = 2 points
+    max_score = 0
 
-    for skill in normalized_job_skills:
-        if skill in explicit_skills:
+    core_skills_in_job = {s for s in job_skills if s in CORE_SKILLS}
+    core_matched = set()
+
+    for skill in job_skills:
+        skill_type = classify_skill(skill)
+        weight = SKILL_WEIGHTS[skill_type]
+
+        # Optional skills shouldn't punish students
+        if student_mode and skill_type == "optional":
+            max_score += weight
+            continue
+
+        max_score += weight
+
+        if skill in explicit:
             matched.append(skill)
-            score += 2
-        elif skill in inferred_skills:
+            score += weight
+            if skill in core_skills_in_job:
+                core_matched.add(skill)
+
+        elif skill in inferred:
             matched.append(f"{skill} (inferred)")
-            score += 1
+            score += int(weight * 0.7)
+            if skill in core_skills_in_job:
+                core_matched.add(skill)
+
         else:
             missing.append(skill)
 
-    match_percentage = int((score / max_score) * 100)
+    match_percentage = int((score / max_score) * 100) if max_score else 0
 
-    # 🧠 Smarter decision logic
-    if match_percentage >= 80:
-        decision = "Strong Match"
-    elif match_percentage >= 50:
+    core_coverage = (
+        len(core_matched) / len(core_skills_in_job)
+        if core_skills_in_job else 1
+    )
+
+    # 📊 Confidence score (0 → 1)
+    confidence = round(
+        (core_coverage * 0.6) + (match_percentage / 100 * 0.4),
+        2
+    )
+
+    # 🧠 Decision logic (academic & fair)
+    if core_coverage >= 0.6:
+        decision = "Medium Match (Junior)"
+    elif match_percentage >= 60:
         decision = "Medium Match"
-    else:
+    elif match_percentage >= 40:
         decision = "Weak Match"
+    else:
+        decision = "Poor Match"
 
     return {
         "match_percentage": match_percentage,
         "matched_skills": matched,
         "missing_skills": missing,
         "decision": decision,
+        "confidence": confidence,
         "details": {
-            "explicit_skills_used": sorted(explicit_skills),
-            "inferred_skills_used": sorted(inferred_skills),
-            "scoring": {
-                "score": score,
-                "max_score": max_score
-            }
-        }
+            "explicit_skills": sorted(explicit),
+            "inferred_skills": sorted(inferred),
+            "core_coverage": round(core_coverage, 2),
+            "student_mode": student_mode,
+            "score": score,
+            "max_score": max_score,
+        },
     }
