@@ -8,17 +8,21 @@ load_dotenv()
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 
-def generate_upskilling_recommendations(missing_skills: list) -> dict:
+def generate_upskilling_recommendations(missing_skills: list):
     """
     Always returns:
-    {
-      "courses": [ ... ]
-    }
-    Never returns empty if missing_skills exist.
+    [
+      {
+        "skill": "...",
+        "recommended_course": "...",
+        "platform": "...",
+        "reason": "..."
+      }
+    ]
     """
 
     if not missing_skills:
-        return {"courses": []}
+        return []
 
     prompt = f"""
 You are a senior AI career mentor.
@@ -59,24 +63,20 @@ Missing skills:
 
     try:
         parsed = json.loads(content)
-
-        # 🛡️ HARD SAFETY: enforce structure
         courses = parsed.get("courses", [])
+
         if not isinstance(courses, list):
             raise ValueError("Invalid courses format")
 
-        return {"courses": courses}
+        return courses
 
     except Exception:
-        # 🚨 FALLBACK: generate simple manual recommendations
-        return {
-            "courses": [
-                {
-                    "skill": skill,
-                    "recommended_course": f"Introduction to {skill}",
-                    "platform": "YouTube",
-                    "reason": "Core foundational skill for the role"
-                }
-                for skill in missing_skills
-            ]
-        }
+        return [
+            {
+                "skill": skill,
+                "recommended_course": f"Introduction to {skill}",
+                "platform": "YouTube",
+                "reason": "Core foundational skill for the role"
+            }
+            for skill in missing_skills
+        ]
