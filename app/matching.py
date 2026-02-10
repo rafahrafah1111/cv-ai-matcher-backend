@@ -3,205 +3,125 @@ from rapidfuzz import process, fuzz
 
 
 # ============================================================
-# 🧠 LARGE TECH SKILL VOCABULARY
+# 🧠 KNOWN SKILLS
 # ============================================================
 
 KNOWN_SKILLS = {
-
-    # Programming
-    "python", "java", "c++", "c", "c#", "javascript", "typescript",
-    "go", "rust", "scala", "r", "matlab", "bash",
-
-    # AI / ML
-    "machine learning", "deep learning", "reinforcement learning",
-    "nlp", "computer vision", "recommendation systems",
-    "neural networks", "transformer", "cnn", "rnn", "gan",
-    "llm", "language models",
-
-    # Frameworks
-    "tensorflow", "pytorch", "keras", "scikit-learn",
-    "xgboost", "lightgbm", "huggingface", "fastai",
-
-    # Data Science
-    "data science", "data analysis", "data mining",
-    "data preprocessing", "feature engineering",
-    "model evaluation", "statistics", "probability",
-    "data visualization", "eda",
-
-    # Libraries
-    "numpy", "pandas", "matplotlib", "seaborn",
-    "plotly", "opencv", "nltk", "spacy",
-
-    # Big Data
-    "spark", "hadoop", "kafka", "airflow",
-
-    # Cloud
-    "aws", "azure", "gcp", "cloud platforms",
-    "cloud computing", "serverless", "lambda",
-
-    # MLOps
-    "mlops", "model deployment", "ci/cd",
-    "docker", "kubernetes", "terraform",
-
-    # Databases
-    "sql", "postgresql", "mysql", "mongodb",
-    "nosql", "redis", "data warehousing",
-
-    # Software engineering
-    "software engineering", "algorithms",
-    "data structures", "design patterns",
-    "microservices", "rest api",
-
-    # AI Applications
-    "speech recognition", "image processing",
-    "text preprocessing", "tokenization",
-    "sentiment analysis", "time series",
-    "anomaly detection"
+    "artificial intelligence", "machine learning", "deep learning",
+    "nlp", "computer vision", "python", "tensorflow", "pytorch",
+    "statistics", "data science", "feature engineering",
+    "data preprocessing", "neural networks", "opencv",
+    "language models", "aws", "docker", "kubernetes"
 }
 
 
 # ============================================================
-# 🔍 SPELL CORRECTION
+# 🔄 SKILL ALIASES
 # ============================================================
 
-def correct_skill(skill: str, threshold: int = 88) -> str:
+SKILL_ALIASES = {
+    "ai": "artificial intelligence",
+    "ml": "machine learning"
+}
 
+
+# ============================================================
+# 🧠 SKILL ONTOLOGY GRAPH (Bidirectional)
+# ============================================================
+
+SKILL_GRAPH = {
+
+    "artificial intelligence": {
+        "machine learning", "deep learning", "nlp", "computer vision"
+    },
+
+    "machine learning": {
+        "artificial intelligence", "statistics", "feature engineering",
+        "data preprocessing"
+    },
+
+    "deep learning": {
+        "artificial intelligence", "neural networks",
+        "tensorflow", "pytorch"
+    },
+
+    "nlp": {
+        "artificial intelligence", "language models"
+    },
+
+    "computer vision": {
+        "artificial intelligence", "opencv"
+    }
+}
+
+
+# ============================================================
+# 🔍 NORMALIZATION
+# ============================================================
+
+def normalize(skill: str) -> str:
     skill = skill.lower().strip()
+    skill = SKILL_ALIASES.get(skill, skill)
 
     match = process.extractOne(skill, KNOWN_SKILLS, scorer=fuzz.ratio)
 
-    if match and match[1] >= threshold:
+    if match and match[1] > 85:
         return match[0]
 
     return skill
 
 
 # ============================================================
-# 🧠 SKILL REASONING GRAPH
+# 🔧 EXPANSION ENGINE
 # ============================================================
 
-SKILL_GRAPH = {
+def expand_skills(skills: Set[str]) -> Set[str]:
+    expanded = set(skills)
 
-    "python": {
-        "numpy", "pandas", "data preprocessing",
-        "feature engineering", "algorithms",
-        "data structures"
-    },
+    for skill in skills:
+        if skill in SKILL_GRAPH:
+            expanded.update(SKILL_GRAPH[skill])
 
-    "machine learning": {
-        "model evaluation", "statistics",
-        "feature engineering", "data preprocessing"
-    },
-
-    "deep learning": {
-        "neural networks", "tensorflow",
-        "pytorch", "cnn", "rnn", "transformer"
-    },
-
-    "nlp": {
-        "tokenization", "text preprocessing",
-        "language models"
-    },
-
-    "computer vision": {
-        "image processing", "opencv"
-    }
-}
+    return expanded
 
 
 # ============================================================
-# 🎯 SKILL CLASSIFICATION
+# 🎯 WEIGHTING
 # ============================================================
 
 CORE_SKILLS = {
-    "python",
+    "artificial intelligence",
     "machine learning",
     "deep learning",
-    "data science",
-    "artificial intelligence"
+    "python",
+    "data science"
 }
 
 OPTIONAL_SKILLS = {
-    "aws", "azure", "gcp",
-    "mlops", "docker",
-    "kubernetes", "ci/cd",
-    "model deployment"
+    "aws", "docker", "kubernetes"
 }
 
-SKILL_WEIGHTS = {
+WEIGHTS = {
     "core": 3,
     "supporting": 2,
-    "optional": 1,
+    "optional": 1
 }
 
 
-# ============================================================
-# 🔧 HELPERS
-# ============================================================
-
-def normalize(skill: str) -> str:
-    return correct_skill(skill.strip().lower())
-
-
-def classify_skill(skill: str) -> str:
-
+def classify(skill):
     if skill in CORE_SKILLS:
         return "core"
-
     if skill in OPTIONAL_SKILLS:
         return "optional"
-
     return "supporting"
 
 
-def extract_explicit_skills(skills: List[str]) -> Set[str]:
-    return {normalize(s) for s in skills if s}
-
-
 # ============================================================
-# 🧠 INFERENCE ENGINE
+# 🧠 SMART MATCH SCORE
 # ============================================================
 
-def infer_skills(explicit: Set[str], education: List[Dict]) -> Set[str]:
-
-    inferred = set()
-
-    # Skill reasoning
-    for skill in explicit:
-        if skill in SKILL_GRAPH:
-            inferred.update(SKILL_GRAPH[skill])
-
-    # Education reasoning
-    for edu in education:
-
-        text = f"{edu.get('degree', '')} {edu.get('field', '')}".lower()
-
-        if "computer science" in text:
-            inferred.update({"python", "algorithms", "data structures"})
-
-        if "data science" in text:
-            inferred.update({"machine learning", "statistics"})
-
-        if "artificial intelligence" in text:
-            inferred.update({"machine learning", "deep learning"})
-
-    return inferred - explicit
-
-
-# ============================================================
-# 🎓 STUDENT DETECTION
-# ============================================================
-
-def is_student(cv: Dict) -> bool:
-
-    experience = cv.get("experience", [])
-
-    if len(experience) <= 1:
-        return True
-
-    summary = cv.get("summary", "").lower()
-
-    return any(term in summary for term in ["student", "intern", "junior"])
+def similarity(a, b):
+    return fuzz.token_sort_ratio(a, b) / 100
 
 
 # ============================================================
@@ -210,22 +130,10 @@ def is_student(cv: Dict) -> bool:
 
 def match_cv_to_job(cv: Dict, job: Dict) -> Dict:
 
-    explicit = extract_explicit_skills(cv.get("skills", []))
-
-    inferred = infer_skills(explicit, cv.get("education", []))
-
+    explicit = {normalize(s) for s in cv.get("skills", [])}
     job_skills = {normalize(s) for s in job.get("skills", [])}
 
-    if not job_skills:
-        return {
-            "match_percentage": 0,
-            "matched_skills": [],
-            "missing_skills": [],
-            "decision": "No Job Skills",
-            "confidence": 0
-        }
-
-    student_mode = is_student(cv)
+    expanded_cv = expand_skills(explicit)
 
     matched = []
     missing = []
@@ -233,55 +141,64 @@ def match_cv_to_job(cv: Dict, job: Dict) -> Dict:
     score = 0
     max_score = 0
 
-    core_job = {s for s in job_skills if s in CORE_SKILLS}
-    core_matched = set()
+    similarity_bonus = 0
 
-    for skill in job_skills:
+    for job_skill in job_skills:
 
-        skill_type = classify_skill(skill)
-        weight = SKILL_WEIGHTS[skill_type]
-
-        if student_mode and skill_type == "optional":
-            max_score += weight
-            continue
-
+        weight = WEIGHTS[classify(job_skill)]
         max_score += weight
 
-        if skill in explicit:
-            matched.append(skill)
+        # Direct match
+        if job_skill in expanded_cv:
+            matched.append(job_skill)
             score += weight
-            if skill in core_job:
-                core_matched.add(skill)
+            continue
 
-        elif skill in inferred:
-            matched.append(f"{skill} (inferred)")
-            score += int(weight * 0.7)
-            if skill in core_job:
-                core_matched.add(skill)
+        # Similarity match
+        best_sim = max(
+            [similarity(job_skill, s) for s in expanded_cv],
+            default=0
+        )
 
+        if best_sim > 0.75:
+            matched.append(f"{job_skill} (similar)")
+            similarity_bonus += weight * best_sim
         else:
-            missing.append(skill)
+            missing.append(job_skill)
 
-    match_percentage = int((score / max_score) * 100) if max_score else 0
+    final_score = score + similarity_bonus
 
-    core_coverage = (
-        len(core_matched) / len(core_job)
-        if core_job else 1
-    )
+    match_percentage = int((final_score / max_score) * 100) if max_score else 0
 
-    confidence = round(
-        (core_coverage * 0.6) + (match_percentage / 100 * 0.4),
-        2
-    )
 
-    if core_coverage >= 0.6:
+# ============================================================
+# 🎓 DECISION LOGIC (Improved)
+# ============================================================
+
+    if match_percentage >= 80:
+        decision = "Strong Match"
+    elif match_percentage >= 65:
+        decision = "Good Match"
+    elif match_percentage >= 50:
         decision = "Medium Match (Junior)"
-    elif match_percentage >= 60:
-        decision = "Medium Match"
-    elif match_percentage >= 40:
+    elif match_percentage >= 35:
         decision = "Weak Match"
     else:
         decision = "Poor Match"
+
+
+# ============================================================
+# 📊 CONFIDENCE SCORE
+# ============================================================
+
+    diversity = len(expanded_cv) / (len(explicit) + 1)
+
+    confidence = round(
+        (match_percentage * 0.6 / 100) +
+        (diversity * 0.4),
+        2
+    )
+
 
     return {
         "match_percentage": match_percentage,
@@ -290,9 +207,6 @@ def match_cv_to_job(cv: Dict, job: Dict) -> Dict:
         "decision": decision,
         "confidence": confidence,
         "details": {
-            "explicit_skills": sorted(explicit),
-            "inferred_skills": sorted(inferred),
-            "core_coverage": round(core_coverage, 2),
-            "student_mode": student_mode
+            "expanded_cv_skills": sorted(expanded_cv)
         }
     }
