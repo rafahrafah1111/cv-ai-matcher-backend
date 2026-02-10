@@ -36,7 +36,7 @@ def run_pipeline(cv_file_path: str, job_description: str):
         missing_skills = match_result.get("missing_skills", [])
         matched_skills = match_result.get("matched_skills", [])
 
-        # 🧠 5️⃣ SMART UPSKILLING SELECTION (core-first, student-friendly)
+        # 🧠 5️⃣ SMART UPSKILLING SELECTION
         CORE_UPSKILL = {
             "deep learning",
             "machine learning",
@@ -69,18 +69,15 @@ def run_pipeline(cv_file_path: str, job_description: str):
             if optional:
                 upskill_targets.append(optional[0])
 
-        # 6️⃣ Generate upskilling recommendations
-        upskilling = generate_upskilling_recommendations(upskill_targets)
-        upskilling_courses = (
-            upskilling.get("courses", []) if isinstance(upskilling, dict) else []
-        )
+        # 6️⃣ Generate upskilling recommendations ✅ FIXED
+        upskilling_courses = generate_upskilling_recommendations(upskill_targets)
 
-        # 7️⃣ Career roadmap (optional / future use)
+        # 7️⃣ Career roadmap
         career_roadmap = generate_career_roadmap(upskill_targets)
         if not isinstance(career_roadmap, list):
             career_roadmap = []
 
-        # 🧠 8️⃣ Explainability (for academic clarity)
+        # 🧠 8️⃣ Explainability
         explanation = {
             "strengths": matched_skills[:5],
             "main_gaps": missing_skills[:3],
@@ -103,7 +100,6 @@ def run_pipeline(cv_file_path: str, job_description: str):
         }
 
     except Exception as e:
-        # 🛑 FAIL-SAFE: never crash the API
         return {
             "match_score": 0,
             "decision": "Error",
